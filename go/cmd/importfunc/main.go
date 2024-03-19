@@ -37,6 +37,10 @@ func main() {
 	}
 	defer module.Close()
 
+	if err = createBazFunc(linker); err != nil {
+		log.Fatalf("failed to create baz func: %s", err)
+	}
+
 	if err = linker.FuncWrap("", "", func(n int32) int32 {
 		return n * 2
 	}); err != nil {
@@ -62,4 +66,17 @@ func main() {
 	} else {
 		log.Printf("result: %d", result)
 	}
+}
+
+func createBazFunc(linker *wasmtime.Linker) error {
+	funcType := wasmtime.NewFuncType([]*wasmtime.ValType{wasmtime.NewValType(wasmtime.KindI32), wasmtime.NewValType(wasmtime.KindI32)}, []*wasmtime.ValType{wasmtime.NewValType(wasmtime.KindI32)})
+	return linker.FuncNew(moduleName, "baz", funcType, func(c *wasmtime.Caller, v []wasmtime.Val) ([]wasmtime.Val, *wasmtime.Trap) {
+		if v == nil || len(v) != 2 {
+			return nil, wasmtime.NewTrap("invalid input parameters")
+		}
+		a := v[0].I32()
+		b := v[1].I32()
+
+		return []wasmtime.Val{wasmtime.ValI32(a * b)}, nil
+	})
 }
