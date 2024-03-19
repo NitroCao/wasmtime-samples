@@ -8,6 +8,10 @@ import (
 	"github.com/bytecodealliance/wasmtime-go/v18"
 )
 
+const (
+	moduleName = "foo"
+)
+
 var (
 	wasmFile string
 )
@@ -20,21 +24,30 @@ func main() {
 	flag.Parse()
 
 	store := wasmtime.NewStore(wasmtime.NewEngine())
+	defer store.Close()
 	wasm, err := os.ReadFile(wasmFile)
 	if err != nil {
 		log.Fatalf("failed to read wasm %s: %s", wasmFile, err)
 	}
 
+	linker := wasmtime.NewLinker(store.Engine)
 	module, err := wasmtime.NewModule(store.Engine, wasm)
 	if err != nil {
 		log.Fatalf("failed to create module: %s", err)
 	}
+	defer module.Close()
 
-	doDouble := wasmtime.WrapFunc(store, func(n int32) int32 {
+	if err = linker.FuncWrap("", "", func(n int32) int32 {
 		return n * 2
-	})
-
-	instance, err := wasmtime.NewInstance(store, module, []wasmtime.AsExtern{doDouble})
+	}); err != nil {
+		log.Fatalf("failed to wrap an anonymous function: %s", err)
+	}
+	if err = linker.FuncWrap(moduleName, "bar", func(n int32) int32 {
+		return n + 1
+	}); err != nil {
+		log.Fatalf("failed to wrap a named function: %s", err)
+	}
+	instance, err := linker.Instantiate(store, module)
 	if err != nil {
 		log.Fatalf("failed to create instance: %s", err)
 	}
